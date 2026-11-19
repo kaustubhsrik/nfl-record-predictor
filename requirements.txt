@@ -1,0 +1,9 @@
+# Core data manipulation & modeling
+pandas>=2.0.0
+scikit-learn>=1.2.0
+numpy>=1.24.0
+
+# NFL data extraction & parquet reader
+nfl_data_py==0.3.2
+fastparquet>=2024.2.0
+
