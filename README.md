@@ -48,16 +48,16 @@ Models are trained only on prior historical windows and evaluated out-of-sample 
 
 * **Peak Single Season (`2018-2020 -> 2021`)**: Random Forest reached **90.6% accuracy** (`1.605 MAE`) and Enhanced Linear Regression reached **89.8% accuracy** (`1.732 MAE`).
 
-### 2. Held-Out Multi-Era Test Windows
-All 24 windows are partitioned into 19 training windows and 5 held-out test seasons across different NFL eras:
+### 2. Held-Out Multi-Era Test Windows: Vegas Comparison & 2nd-Degree Floor–Ceiling Accuracy
+All 24 windows are partitioned into 19 training windows and 5 held-out test seasons across different NFL eras. In addition to **1st-Degree Accuracy** (exact point prediction vs. actual wins), the pipeline computes a data-driven **[Floor – Ceiling] record range** for every team from the dispersion across the 300 Random Forest trees to measure **2nd-Degree Range Accuracy** (and the percentage of teams finishing inside their projected Floor–Ceiling window), and compares directly against **Pre-Season Vegas Implied Win Totals**:
 
-| Held-Out Test Window | Baseline LR MAE | Enhanced LR Acc (MAE / $R^2$) | Random Forest Acc (MAE / $R^2$) |
-| :--- | :---: | :---: | :---: |
-| **`2002-2004 -> 2005`** | 2.88W | 82.50% (2.80W / $0.087$) | **83.84%** (**2.59W** / **$0.178$**) |
-| **`2007-2009 -> 2010`** | 2.28W | 84.97% (2.40W / $0.072$) | **85.87%** (**2.26W** / **$0.095$**) |
-| **`2011-2013 -> 2014`** | 2.19W | **87.82%** (**1.95W** / **$0.426$**) | 87.42% (2.01W / $0.396$) |
-| **`2014-2016 -> 2017`** | 2.30W | **87.51%** (**2.00W** / **$0.358$**) | 86.51% (2.16W / $0.334$) |
-| **`2022-2024 -> 2025`** | 2.83W | **83.92%** (**2.73W** / **$0.017$**) | 83.26% (2.85W / $0.006$) |
+| Held-Out Test Window | Vegas Pre-Season Acc (MAE) | Enhanced LR 1st-Deg Acc (MAE) | Random Forest 1st-Deg Acc (MAE) | 2nd-Deg Range Acc (%) | Teams in 3–4G Floor–Ceiling (%) | Beat/Tie Vegas (%) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **`2002-2004 -> 2005`** | 82.9% (2.74W) | 82.5% (2.80W) | **83.8%** (**2.59W**) | **91.8%** | 37.5% | 46.9% |
+| **`2007-2009 -> 2010`** | **86.4%** (**2.18W**) | 85.0% (2.40W) | 85.9% (2.26W) | **93.6%** | 46.9% | 34.4% |
+| **`2011-2013 -> 2014`** | 86.7% (2.13W) | **87.8%** (**1.95W**) | 87.4% (2.01W) | **96.3%** | **65.6%** | **68.8%** |
+| **`2014-2016 -> 2017`** | 87.1% (2.06W) | **87.5%** (**2.00W**) | 86.5% (2.16W) | **95.1%** | **62.5%** | **53.1%** |
+| **`2022-2024 -> 2025`** | **84.3%** (**2.67W**) | 83.9% (2.73W) | 83.3% (2.85W) | **91.9%** | 40.6% | 46.9% |
 
 ---
 
@@ -66,7 +66,10 @@ All 24 windows are partitioned into 19 training windows and 5 held-out test seas
 ### Pure Single-Season Expected vs. Actual Wins (2014 & 2025)
 ![Expected vs. Actual Wins Scatter Plot](plots/actual_vs_predicted_scatter.png)
 
-### 2025 Team-by-Team Expected vs. Actual Wins Comparison
+### Vegas vs. Model & 2nd-Degree Floor–Ceiling Accuracy Comparison
+![Vegas vs. Model Comparison](plots/vegas_vs_model_comparison.png)
+
+### 2025 Team-by-Team Expected vs. Actual Wins, Vegas & Floor–Ceiling Band
 ![2025 Team-by-Team Residual Dumbbell Chart](plots/prediction_error_residuals.png)
 
 ### Random Forest Feature Importance
@@ -83,6 +86,7 @@ nfl-record-predictor/
 ├── plots/                             # Generated evaluation plots
 │   ├── actual_vs_predicted_scatter.png
 │   ├── prediction_error_residuals.png
+│   ├── vegas_vs_model_comparison.png
 │   └── rf_feature_importance.png
 └── README.md
 ```

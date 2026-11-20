@@ -271,11 +271,15 @@ def generate_evaluation_plots(
         top_df["Actual Wins"].values,
         top_df["Enhanced LR"].values,
         top_df["Games"].values,
+        top_df["Floor Wins"].values if "Floor Wins" in top_df else None,
+        top_df["Ceiling Wins"].values if "Ceiling Wins" in top_df else None,
     )
     m_top_rf = evaluate_predictions_in_wins(
         top_df["Actual Wins"].values,
         top_df["Random Forest"].values,
         top_df["Games"].values,
+        top_df["Floor Wins"].values if "Floor Wins" in top_df else None,
+        top_df["Ceiling Wins"].values if "Ceiling Wins" in top_df else None,
     )
 
     spot_df = all_test_results_df[
@@ -286,11 +290,15 @@ def generate_evaluation_plots(
         spot_df["Actual Wins"].values,
         spot_df["Enhanced LR"].values,
         spot_df["Games"].values,
+        spot_df["Floor Wins"].values if "Floor Wins" in spot_df else None,
+        spot_df["Ceiling Wins"].values if "Ceiling Wins" in spot_df else None,
     )
     m_spot_rf = evaluate_predictions_in_wins(
         spot_df["Actual Wins"].values,
         spot_df["Random Forest"].values,
         spot_df["Games"].values,
+        spot_df["Floor Wins"].values if "Floor Wins" in spot_df else None,
+        spot_df["Ceiling Wins"].values if "Ceiling Wins" in spot_df else None,
     )
 
     # --- Plot 1: 2x2 Pure Single-Season NFL Team Logo Scatter Plot ---
@@ -303,7 +311,7 @@ def generate_evaluation_plots(
         top_df["Enhanced LR"].values,
         logos,
         f"Enhanced Linear Regression — Single Season ({top_window})\n"
-        f"Accuracy: {m_top_lr['accuracy_pct']:.1f}% | MAE: {m_top_lr['mae']:.2f}W | R²: {m_top_lr['r2']:.3f}",
+        f"1st-Deg Acc: {m_top_lr['accuracy_pct']:.1f}% | 2nd-Deg Range Acc: {m_top_lr['second_deg_acc_pct']:.1f}% | MAE: {m_top_lr['mae']:.2f}W",
         axis_min=1.0,
         axis_max=16.5,
     )
@@ -314,7 +322,7 @@ def generate_evaluation_plots(
         top_df["Random Forest"].values,
         logos,
         f"Tuned Random Forest — Single Season ({top_window})\n"
-        f"Accuracy: {m_top_rf['accuracy_pct']:.1f}% | MAE: {m_top_rf['mae']:.2f}W | R²: {m_top_rf['r2']:.3f}",
+        f"1st-Deg Acc: {m_top_rf['accuracy_pct']:.1f}% | 2nd-Deg Range Acc: {m_top_rf['second_deg_acc_pct']:.1f}% | MAE: {m_top_rf['mae']:.2f}W",
         axis_min=1.0,
         axis_max=16.5,
     )
@@ -326,7 +334,7 @@ def generate_evaluation_plots(
         spot_df["Enhanced LR"].values,
         logos,
         f"Enhanced Linear Regression — Single Season ({spotlight_window})\n"
-        f"Accuracy: {m_spot_lr['accuracy_pct']:.1f}% | MAE: {m_spot_lr['mae']:.2f}W | R²: {m_spot_lr['r2']:.3f}",
+        f"1st-Deg Acc: {m_spot_lr['accuracy_pct']:.1f}% | 2nd-Deg Range Acc: {m_spot_lr['second_deg_acc_pct']:.1f}% | MAE: {m_spot_lr['mae']:.2f}W",
         axis_min=1.0,
         axis_max=17.0,
     )
@@ -337,7 +345,7 @@ def generate_evaluation_plots(
         spot_df["Random Forest"].values,
         logos,
         f"Tuned Random Forest — Single Season ({spotlight_window})\n"
-        f"Accuracy: {m_spot_rf['accuracy_pct']:.1f}% | MAE: {m_spot_rf['mae']:.2f}W | R²: {m_spot_rf['r2']:.3f}",
+        f"1st-Deg Acc: {m_spot_rf['accuracy_pct']:.1f}% | 2nd-Deg Range Acc: {m_spot_rf['second_deg_acc_pct']:.1f}% | MAE: {m_spot_rf['mae']:.2f}W",
         axis_min=1.0,
         axis_max=17.0,
     )
@@ -352,23 +360,52 @@ def generate_evaluation_plots(
     fig.savefig(scatter_path, bbox_inches="tight")
     plt.close(fig)
 
-    # --- Plot 2: Direct 32-Team Expected vs. Actual Wins Dumbbell Chart with Logos ---
-    fig, ax = plt.subplots(figsize=(11, 11), dpi=150)
+    # --- Plot 2: Direct 32-Team Expected vs. Actual Wins Dumbbell Chart with Floor-Ceiling & Vegas ---
+    fig, ax = plt.subplots(figsize=(11.5, 11.5), dpi=180)
     y_pos = np.arange(len(spot_df))
     spot_sorted = spot_df.sort_values(
         by=["Actual Wins", "Enhanced LR"], ascending=[True, True]
     ).reset_index(drop=True)
 
+    # Color-coded Floor-to-Ceiling prediction band (Green = Actual in Range, Red = Outside Range)
+    if "Floor Wins" in spot_sorted.columns and "Ceiling Wins" in spot_sorted.columns:
+        drew_hit, drew_miss = False, False
+        for idx, row in spot_sorted.iterrows():
+            act_w = float(row["Actual Wins"])
+            fl_w = float(row["Floor Wins"])
+            ce_w = float(row["Ceiling Wins"])
+            in_rng = fl_w <= act_w <= ce_w
+            bar_color = "#2ca02c" if in_rng else "#d62728"
+            bar_alpha = 0.26 if in_rng else 0.16
+            lbl = None
+            if in_rng and not drew_hit:
+                lbl = "Floor–Ceiling Range (Hit ✓)"
+                drew_hit = True
+            elif (not in_rng) and not drew_miss:
+                lbl = "Floor–Ceiling Range (Miss)"
+                drew_miss = True
+            ax.plot(
+                [fl_w, ce_w],
+                [idx, idx],
+                color=bar_color,
+                alpha=bar_alpha,
+                linewidth=8.5,
+                solid_capstyle="round",
+                zorder=1,
+                label=lbl,
+            )
+
     for idx, row in spot_sorted.iterrows():
         act_w = float(row["Actual Wins"])
         lr_w = float(row["Enhanced LR"])
         rf_w = float(row["Random Forest"])
+        vg_w = float(row["Vegas O/U"]) if "Vegas O/U" in spot_sorted.columns else lr_w
         ax.plot(
-            [min(act_w, lr_w, rf_w), max(act_w, lr_w, rf_w)],
+            [min(act_w, lr_w, rf_w, vg_w), max(act_w, lr_w, rf_w, vg_w)],
             [idx, idx],
-            color="#bbbbbb",
-            linewidth=1.8,
-            zorder=1,
+            color="#aaaaaa",
+            linewidth=1.6,
+            zorder=2,
         )
 
     ax.scatter(
@@ -377,16 +414,28 @@ def generate_evaluation_plots(
         color="#111111",
         s=75,
         label="Actual Wins",
-        zorder=3,
+        zorder=5,
     )
+    if "Vegas O/U" in spot_sorted.columns:
+        ax.scatter(
+            spot_sorted["Vegas O/U"],
+            y_pos,
+            color="#e69f00",
+            edgecolor="#333333",
+            linewidth=0.6,
+            s=115,
+            marker="*",
+            label="Vegas Pre-Season Expected Wins",
+            zorder=6,
+        )
     ax.scatter(
         spot_sorted["Enhanced LR"],
         y_pos,
         color="#1f77b4",
         s=65,
         marker="D",
-        label="Enhanced Linear Regression Predicted",
-        zorder=4,
+        label="Enhanced Linear Regression",
+        zorder=5,
     )
     ax.scatter(
         spot_sorted["Random Forest"],
@@ -394,8 +443,8 @@ def generate_evaluation_plots(
         color="#2ca02c",
         s=70,
         marker="^",
-        label="Random Forest Predicted",
-        zorder=4,
+        label="Tuned Random Forest",
+        zorder=5,
     )
 
     for idx, row in spot_sorted.iterrows():
@@ -405,7 +454,7 @@ def generate_evaluation_plots(
             max_dim = float(max(img.shape[0], img.shape[1]))
             norm_zoom = (0.035 * 500.0) / max_dim
             ib = OffsetImage(img, zoom=norm_zoom)
-            ab = AnnotationBbox(ib, (0.4, idx), frameon=False, zorder=5)
+            ab = AnnotationBbox(ib, (0.4, idx), frameon=False, zorder=6)
             ax.add_artist(ab)
 
     ax.set_yticks(y_pos)
@@ -414,13 +463,13 @@ def generate_evaluation_plots(
     ax.set_xlim(0.0, 17.0)
     ax.set_xlabel("Regular-Season Wins", fontsize=12, weight="bold")
     ax.set_title(
-        f"Team-by-Team Expected vs. Actual Wins ({spotlight_window})\n"
-        f"Black Circle = Actual Wins | Blue Diamond = Linear Regression | Green Triangle = Random Forest",
-        fontsize=12.5,
+        f"Team-by-Team Expected vs. Actual Wins, Vegas & Floor–Ceiling Band ({spotlight_window})\n"
+        f"Shaded Bar = Model Floor–Ceiling | Black Circle = Actual | Gold Star = Vegas | Blue/Green = Models",
+        fontsize=12,
         weight="bold",
     )
     ax.grid(True, axis="x", linestyle=":", alpha=0.6)
-    ax.legend(loc="lower right", fontsize=11)
+    ax.legend(loc="lower right", fontsize=10.5)
     fig.tight_layout()
     res_path = PLOTS_DIR / "prediction_error_residuals.png"
     fig.savefig(res_path, bbox_inches="tight")
@@ -462,10 +511,95 @@ def generate_evaluation_plots(
     fig.savefig(fi_path, bbox_inches="tight")
     plt.close(fig)
 
+    # --- Plot 4: Vegas vs. Model & 2nd-Degree Floor-Ceiling Accuracy Comparison ---
+    vg_path = PLOTS_DIR / "vegas_vs_model_comparison.png"
+    if "Vegas O/U" in all_test_results_df.columns:
+        fig, axes = plt.subplots(1, 2, figsize=(15.5, 6.5), dpi=180)
+
+        # Panel A: Grouped Bar Chart across all 5 Held-Out Test Windows
+        win_list = list(dict.fromkeys(all_test_results_df["Window"]))
+        short_yrs = [w.split("->")[-1].strip() for w in win_list]
+        vg_accs, lr_accs, rf_accs, deg2_accs = [], [], [], []
+        for w_lbl in win_list:
+            sub = all_test_results_df[all_test_results_df["Window"] == w_lbl]
+            yt = sub["Actual Wins"].values
+            gm = sub["Games"].values
+            vg_accs.append(evaluate_predictions_in_wins(yt, sub["Vegas O/U"].values, gm)["accuracy_pct"])
+            m_l = evaluate_predictions_in_wins(
+                yt, sub["Enhanced LR"].values, gm,
+                sub["Floor Wins"].values if "Floor Wins" in sub else None,
+                sub["Ceiling Wins"].values if "Ceiling Wins" in sub else None,
+            )
+            lr_accs.append(m_l["accuracy_pct"])
+            rf_accs.append(evaluate_predictions_in_wins(yt, sub["Random Forest"].values, gm)["accuracy_pct"])
+            deg2_accs.append(m_l["second_deg_acc_pct"])
+
+        x_idx = np.arange(len(short_yrs))
+        bw = 0.20
+        ax0 = axes[0]
+        b1 = ax0.bar(x_idx - 1.5 * bw, vg_accs, bw, label="Vegas Pre-Season Implied", color="#e69f00", edgecolor="black")
+        b2 = ax0.bar(x_idx - 0.5 * bw, lr_accs, bw, label="Enhanced Linear Reg (1st-Deg)", color="#1f77b4", edgecolor="black")
+        b3 = ax0.bar(x_idx + 0.5 * bw, rf_accs, bw, label="Tuned Random Forest (1st-Deg)", color="#2ca02c", edgecolor="black")
+        b4 = ax0.bar(x_idx + 1.5 * bw, deg2_accs, bw, label="Model 2nd-Deg (Floor–Ceiling)", color="#6a3d9a", edgecolor="black")
+
+        for bars_grp in (b1, b2, b3, b4):
+            for bar in bars_grp:
+                h = bar.get_height()
+                ax0.text(bar.get_x() + bar.get_width() / 2.0, h + 0.35, f"{h:.1f}%", ha="center", va="bottom", fontsize=8.5, weight="bold")
+
+        ax0.set_xticks(x_idx)
+        ax0.set_xticklabels([f"{y} Season" for y in short_yrs], fontsize=11, weight="bold")
+        ax0.set_ylim(75.0, 102.0)
+        ax0.set_ylabel("Prediction Accuracy (%)", fontsize=11.5, weight="bold")
+        ax0.set_title("Vegas vs. Models (1st-Degree & 2nd-Degree Floor–Ceiling Accuracy)", fontsize=12.5, weight="bold")
+        ax0.grid(True, axis="y", linestyle=":", alpha=0.5)
+        ax0.legend(loc="lower right", fontsize=9.5)
+
+        # Panel B: Head-to-Head Error Scatter (Vegas Absolute Error vs. Model Absolute Error in Spotlight Window)
+        ax1 = axes[1]
+        vg_err = np.abs(spot_df["Vegas O/U"].values - spot_df["Actual Wins"].values)
+        lr_err = np.abs(spot_df["Enhanced LR"].values - spot_df["Actual Wins"].values)
+        max_e = max(float(np.max(vg_err)), float(np.max(lr_err))) + 0.8
+        e_line = np.linspace(0, max_e, 100)
+        ax1.plot(e_line, e_line, "--", color="#222222", linewidth=1.6, label="Tie (Model Error = Vegas Error)")
+        ax1.fill_between(e_line, 0, e_line, color="#2ca02c", alpha=0.13, label="Model Beats Vegas (Lower Error)")
+        ax1.fill_between(e_line, e_line, max_e, color="#d62728", alpha=0.08, label="Vegas Beats Model")
+
+        coords = np.column_stack([vg_err, lr_err]).astype(float)
+        for i in range(len(coords)):
+            for j in range(i):
+                if np.linalg.norm(coords[i] - coords[j]) < 0.22:
+                    coords[i, 0] += 0.15
+                    coords[i, 1] -= 0.12
+        for tm, (xv, yv) in zip(spot_df["Team"].values, coords):
+            if tm in logos:
+                img = logos[tm]
+                max_dim = float(max(img.shape[0], img.shape[1]))
+                ab = AnnotationBbox(OffsetImage(img, zoom=(0.045 * 500.0) / max_dim), (xv, yv), frameon=False, zorder=4)
+                ax1.add_artist(ab)
+
+        beat_pct = float(np.mean(lr_err <= vg_err) * 100.0)
+        ax1.set_xlim(0, max_e)
+        ax1.set_ylim(0, max_e)
+        ax1.set_xlabel("Vegas Absolute Error (|Vegas - Actual| Wins)", fontsize=11.5, weight="bold")
+        ax1.set_ylabel("Model Absolute Error (|Model - Actual| Wins)", fontsize=11.5, weight="bold")
+        ax1.set_title(
+            f"Head-to-Head vs. Vegas ({spotlight_window}) — Model Beat/Tied on {beat_pct:.1f}% of Teams",
+            fontsize=12,
+            weight="bold",
+        )
+        ax1.grid(True, linestyle=":", alpha=0.5)
+        ax1.legend(loc="upper left", fontsize=9.5)
+
+        fig.tight_layout()
+        fig.savefig(vg_path, bbox_inches="tight")
+        plt.close(fig)
+
     print("\n" + "-" * 98)
     print("VISUAL DIAGNOSTIC PLOTS GENERATED (WITH OFFICIAL NFL TEAM LOGOS):")
-    print(f"  • Team Logo Scatter Plot (Avg + Single Season) : {scatter_path}")
-    print(f"  • 32-Team Expected vs. Actual Dumbbell Chart   : {res_path}")
+    print(f"  • Team Logo Scatter Plot (Single Seasons)      : {scatter_path}")
+    print(f"  • 32-Team Dumbbell Chart (with Vegas & Bounds) : {res_path}")
+    print(f"  • Vegas vs. Model & 2nd-Degree Accuracy Chart  : {vg_path}")
     print(f"  • Feature Importance Chart (RF)                : {fi_path}")
     print("-" * 98)
 
@@ -1007,6 +1141,40 @@ def build_rolling_window_dataset_for_spec(
         .rename(columns={"opp_pythag": "target_sos_pythag"})
     )
 
+    # --- 4B. Pre-Season Vegas Implied Win Totals for `target_yr` ---
+    # Project each team's pre-season market rating across all scheduled games in `target_yr`
+    # using Stern's normal game-margin model: P(win) = Phi(expected_spread / 13.45).
+    r_map = dict(
+        zip(
+            enhanced_df["team"],
+            0.55 * enhanced_df["preseason_wk1_rating"]
+            + 0.45 * enhanced_df["market_srs_weighted"],
+        )
+    )
+    h_vg = sched_target[["home_team", "away_team"]].copy()
+    h_vg["team"] = h_vg["home_team"]
+    h_vg["sp"] = (
+        h_vg["home_team"].map(r_map).fillna(0.0)
+        - h_vg["away_team"].map(r_map).fillna(0.0)
+        + 2.0
+    )
+    a_vg = sched_target[["home_team", "away_team"]].copy()
+    a_vg["team"] = a_vg["away_team"]
+    a_vg["sp"] = (
+        a_vg["away_team"].map(r_map).fillna(0.0)
+        - a_vg["home_team"].map(r_map).fillna(0.0)
+        - 2.0
+    )
+    vg_games = pd.concat([h_vg[["team", "sp"]], a_vg[["team", "sp"]]], ignore_index=True)
+    # Normal CDF via vectorised erf approximation / math.erf
+    from math import erf, sqrt
+    vg_games["wp"] = [0.5 * (1.0 + erf(float(s) / (13.45 * sqrt(2.0)))) for s in vg_games["sp"]]
+    vg_df = (
+        vg_games.groupby("team", as_index=False)["wp"]
+        .sum()
+        .rename(columns={"wp": "vegas_preseason_wins"})
+    )
+
     # --- 5. Target Wins & Target Games Played in `target_yr` ---
     target_season_df = seasonal_metrics[seasonal_metrics["season"] == target_yr][
         ["team", "wins", "games_played"]
@@ -1021,7 +1189,11 @@ def build_rolling_window_dataset_for_spec(
         .merge(base_seasonal, on="team", how="outer")
         .merge(enhanced_df, on="team", how="outer")
         .merge(sos_df, on="team", how="left")
+        .merge(vg_df, on="team", how="left")
         .merge(target_season_df, on="team", how="inner")
+    )
+    merged["vegas_preseason_wins"] = merged["vegas_preseason_wins"].fillna(
+        0.5 * merged["target_games"]
     )
 
     merged["window_label"] = window_label
@@ -1031,7 +1203,7 @@ def build_rolling_window_dataset_for_spec(
     cols_order = (
         ["window_label", "target_year", "team"]
         + all_feature_cols
-        + ["target_games", "target_win_pct", "target_wins"]
+        + ["vegas_preseason_wins", "target_games", "target_win_pct", "target_wins"]
     )
     return merged[cols_order]
 
@@ -1072,12 +1244,15 @@ def evaluate_predictions_in_wins(
     y_true_wins: np.ndarray,
     y_pred_wins: np.ndarray,
     target_games: Union[np.ndarray, float] = 16.5,
+    floor_wins: Union[np.ndarray, None] = None,
+    ceiling_wins: Union[np.ndarray, None] = None,
 ) -> dict:
     """
-    Compute comprehensive accuracy metrics in terms of NFL regular-season wins,
-    including a 0-100% Schedule-Normalized Accuracy score:
-        Accuracy (%) = (1 - |Pred_Wins - Actual_Wins| / Season_Games) * 100
-    and Winning/Losing Record (.500+) Classification Accuracy (%).
+    Compute comprehensive accuracy metrics in terms of NFL regular-season wins:
+      - 1st-Degree Accuracy (%): (1 - |Pred_Wins - Actual_Wins| / Season_Games) * 100
+      - 2nd-Degree Floor–Ceiling Hit Rate (%): % of teams with Floor <= Actual_Wins <= Ceiling
+      - 2nd-Degree Range Accuracy (%): 100% if inside [Floor, Ceiling], else penalized only by
+        distance outside the [Floor, Ceiling] band.
     """
     abs_err = np.abs(y_pred_wins - y_true_wins)
     mae = float(mean_absolute_error(y_true_wins, y_pred_wins))
@@ -1093,6 +1268,23 @@ def evaluate_predictions_in_wins(
     pred_winning_rec = (y_pred_wins / games_arr) >= 0.5
     tier_acc_pct = float(np.mean(actual_winning_rec == pred_winning_rec) * 100.0)
 
+    if floor_wins is not None and ceiling_wins is not None:
+        fl_arr = np.asarray(floor_wins, dtype=float)
+        ce_arr = np.asarray(ceiling_wins, dtype=float)
+        in_band = (y_true_wins >= fl_arr) & (y_true_wins <= ce_arr)
+        floor_ceil_hit_pct = float(np.mean(in_band) * 100.0)
+        band_dist = np.where(
+            y_true_wins < fl_arr,
+            fl_arr - y_true_wins,
+            np.where(y_true_wins > ce_arr, y_true_wins - ce_arr, 0.0),
+        )
+        second_deg_acc_pct = float(
+            np.mean(np.maximum(0.0, 1.0 - band_dist / games_arr)) * 100.0
+        )
+    else:
+        floor_ceil_hit_pct = within_2
+        second_deg_acc_pct = accuracy_pct
+
     return {
         "mae": mae,
         "rmse": rmse,
@@ -1101,7 +1293,46 @@ def evaluate_predictions_in_wins(
         "tier_acc_pct": tier_acc_pct,
         "within_1_5_pct": within_1,
         "within_2_5_pct": within_2,
+        "floor_ceil_hit_pct": floor_ceil_hit_pct,
+        "second_deg_acc_pct": second_deg_acc_pct,
     }
+
+
+def compute_team_floor_and_ceiling(
+    pred_wins: np.ndarray,
+    rf_model: RandomForestRegressor,
+    X_features: pd.DataFrame,
+    games: Union[np.ndarray, float],
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Compute a tight 3-to-4 game [Floor Wins, Ceiling Wins] range for each team:
+      - Low-variance / stable teams (below-median tree dispersion): 3-game span (±1.5 wins,
+        e.g., projected 10.4W -> 9-8 to 12-5).
+      - Higher-variance teams (above-median tree dispersion): 4-game span (±2.0 wins,
+        e.g., projected 10.0W -> 8-9 to 12-5).
+    """
+    games_arr = np.broadcast_to(np.asarray(games, dtype=float), len(pred_wins))
+    tree_preds = np.array([
+        calibrate_win_pct(t.predict(X_features.values)) * games_arr
+        for t in rf_model.estimators_
+    ])
+    tree_std = np.std(tree_preds, axis=0)
+    med_std = float(np.median(tree_std))
+
+    floor_list, ceil_list = [], []
+    for p, s, g in zip(pred_wins, tree_std, games_arr):
+        p_rnd = int(round(float(p)))
+        if float(s) >= med_std:
+            f_w, c_w = p_rnd - 2, p_rnd + 2  # 4-game span (e.g., 10-7 -> 8-9 to 12-5)
+        else:
+            if float(p) >= p_rnd:
+                f_w, c_w = p_rnd - 1, p_rnd + 2  # 3-game span (e.g., 10.4 -> 9-8 to 12-5)
+            else:
+                f_w, c_w = p_rnd - 2, p_rnd + 1  # 3-game span (e.g., 9.6 -> 8-9 to 11-6)
+        floor_list.append(int(np.clip(f_w, 1, int(g) - 1)))
+        ceil_list.append(int(np.clip(c_w, 1, int(g) - 1)))
+
+    return np.array(floor_list, dtype=int), np.array(ceil_list, dtype=int)
 
 
 def calibrate_win_pct(raw_win_pct: np.ndarray, gamma: float = DISPERSION_GAMMA) -> np.ndarray:
@@ -1389,61 +1620,86 @@ def train_and_evaluate_custom_windows(
             calibrate_win_pct(rf_model.predict(w_df[ENHANCED_FEATURE_COLS]))
             * w_games
         )
+        pred_vegas = w_df["vegas_preseason_wins"].values
+
+        floor_lr, ceil_lr = compute_team_floor_and_ceiling(
+            pred_lr, rf_model, w_df[ENHANCED_FEATURE_COLS], w_games
+        )
+        floor_rf, ceil_rf = compute_team_floor_and_ceiling(
+            pred_rf, rf_model, w_df[ENHANCED_FEATURE_COLS], w_games
+        )
 
         m_base = evaluate_predictions_in_wins(y_true, pred_base, w_games)
-        m_lr = evaluate_predictions_in_wins(y_true, pred_lr, w_games)
-        m_rf = evaluate_predictions_in_wins(y_true, pred_rf, w_games)
+        m_vegas = evaluate_predictions_in_wins(y_true, pred_vegas, w_games)
+        m_lr = evaluate_predictions_in_wins(y_true, pred_lr, w_games, floor_lr, ceil_lr)
+        m_rf = evaluate_predictions_in_wins(y_true, pred_rf, w_games, floor_rf, ceil_rf)
+
+        beat_vegas_pct = float(
+            np.mean(np.abs(pred_lr - y_true) <= np.abs(pred_vegas - y_true)) * 100.0
+        )
 
         test_summary_rows.append({
             "Test Window": w_label,
-            "Base LR Acc (%)": f"{m_base['accuracy_pct']:.1f}%",
+            "Vegas Acc (%)": f"{m_vegas['accuracy_pct']:.1f}%",
             "Enh LR Acc (%)": f"{m_lr['accuracy_pct']:.1f}%",
             "RF Acc (%)": f"{m_rf['accuracy_pct']:.1f}%",
-            "Base LR MAE": round(m_base["mae"], 3),
+            "2nd-Deg Range Acc": f"{m_lr['second_deg_acc_pct']:.1f}%",
+            "In Floor-Ceil (%)": f"{m_lr['floor_ceil_hit_pct']:.1f}%",
+            "Vegas MAE": round(m_vegas["mae"], 3),
             "Enh LR MAE": round(m_lr["mae"], 3),
             "RF MAE": round(m_rf["mae"], 3),
-            "Enh LR R^2": round(m_lr["r2"], 3),
-            "RF R^2": round(m_rf["r2"], 3),
+            "Beat/Tie Vegas": f"{beat_vegas_pct:.1f}%",
         })
 
         lr_team_acc = np.maximum(0.0, 1.0 - np.abs(pred_lr - y_true) / w_games) * 100.0
-        rf_team_acc = np.maximum(0.0, 1.0 - np.abs(pred_rf - y_true) / w_games) * 100.0
+        in_band_flags = [
+            "YES" if (fl <= act <= ce) else "NO"
+            for act, fl, ce in zip(y_true.astype(int), floor_lr, ceil_lr)
+        ]
+        floor_ceil_labels = [
+            f"{fl}-{int(g)-fl} to {ce}-{int(g)-ce}"
+            for fl, ce, g in zip(floor_lr, ceil_lr, w_games)
+        ]
 
         comparison_df = pd.DataFrame({
             "Window": w_df["window_label"].values,
             "Team": w_df["team"].values,
             "Actual Wins": y_true.astype(int),
             "Games": w_games,
-            "QB Upgrade PD": w_df["qb_upgrade_pd_delta"].round(2).values,
-            "Baseline LR": pred_base.round(2),
+            "Vegas O/U": pred_vegas.round(2),
             "Enhanced LR": pred_lr.round(2),
             "Random Forest": pred_rf.round(2),
-            "LR Acc (%)": [f"{a:.1f}%" for a in lr_team_acc],
-            "RF Acc (%)": [f"{a:.1f}%" for a in rf_team_acc],
+            "Floor Wins": floor_lr,
+            "Ceiling Wins": ceil_lr,
+            "Floor-Ceiling Range": floor_ceil_labels,
+            "In Range?": in_band_flags,
+            "1st-Deg Acc": [f"{a:.1f}%" for a in lr_team_acc],
         }).sort_values(by=["Actual Wins", "Enhanced LR"], ascending=[False, False])
         all_test_dfs.append(comparison_df)
 
         print(f"\nTest Window: {w_label}")
         print(
-            f"  Baseline Linear Reg -> Accuracy: {m_base['accuracy_pct']:.2f}% | "
-            f".500+ Record Acc: {m_base['tier_acc_pct']:.1f}% | "
-            f"MAE: {m_base['mae']:.3f} wins | R^2: {m_base['r2']:.3f}"
+            f"  Vegas Pre-Season    -> 1st-Deg Acc: {m_vegas['accuracy_pct']:.2f}% | "
+            f".500+ Record Acc: {m_vegas['tier_acc_pct']:.1f}% | "
+            f"MAE: {m_vegas['mae']:.3f} wins | R^2: {m_vegas['r2']:.3f}"
         )
         print(
-            f"  Enhanced Linear Reg -> Accuracy: {m_lr['accuracy_pct']:.2f}% | "
-            f".500+ Record Acc: {m_lr['tier_acc_pct']:.1f}% | "
-            f"MAE: {m_lr['mae']:.3f} wins | R^2: {m_lr['r2']:.3f} | "
-            f"Within ±2 Wins: {m_lr['within_2_5_pct']:.1f}%"
+            f"  Enhanced Linear Reg -> 1st-Deg Acc: {m_lr['accuracy_pct']:.2f}% | "
+            f"2nd-Deg Range Acc: {m_lr['second_deg_acc_pct']:.2f}% (In Floor-Ceil: {m_lr['floor_ceil_hit_pct']:.1f}%) | "
+            f"MAE: {m_lr['mae']:.3f} wins | R^2: {m_lr['r2']:.3f} | Beat/Tie Vegas: {beat_vegas_pct:.1f}%"
         )
         print(
-            f"  Random Forest       -> Accuracy: {m_rf['accuracy_pct']:.2f}% | "
-            f".500+ Record Acc: {m_rf['tier_acc_pct']:.1f}% | "
-            f"MAE: {m_rf['mae']:.3f} wins | R^2: {m_rf['r2']:.3f} | "
-            f"Within ±2 Wins: {m_rf['within_2_5_pct']:.1f}%"
+            f"  Random Forest       -> 1st-Deg Acc: {m_rf['accuracy_pct']:.2f}% | "
+            f"2nd-Deg Range Acc: {m_rf['second_deg_acc_pct']:.2f}% (In Floor-Ceil: {m_rf['floor_ceil_hit_pct']:.1f}%) | "
+            f"MAE: {m_rf['mae']:.3f} wins | R^2: {m_rf['r2']:.3f}"
         )
         if w_label in ("2011-2013 -> 2014", "2022-2024 -> 2025"):
             print("-" * 98)
-            print(comparison_df.drop(columns=["Games"]).to_string(index=False))
+            print(
+                comparison_df.drop(columns=["Games", "Floor Wins", "Ceiling Wins"]).to_string(
+                    index=False
+                )
+            )
 
     print("\n" + "=" * 98)
     print("SUMMARY ACROSS ALL HELD-OUT TEST WINDOWS")
@@ -1558,14 +1814,15 @@ def project_2026_season(
     pred_base_26 = base_lr.predict(df_2026[BASELINE_FEATURE_COLS])
     pred_lr_26 = calibrate_win_pct(enh_lr.predict(df_2026[ENHANCED_FEATURE_COLS])) * 17.0
     pred_rf_26 = calibrate_win_pct(rf_model.predict(df_2026[ENHANCED_FEATURE_COLS])) * 17.0
+    floor_26, ceil_26 = compute_team_floor_and_ceiling(
+        pred_lr_26, rf_model, df_2026[ENHANCED_FEATURE_COLS], 17.0
+    )
 
     proj_table = pd.DataFrame({
         "Window": "2023-2025 -> 2026",
         "Team": df_2026["team"].values,
         "2025 Wins": df_2026["wins_2025"].values,
         "3Yr Pythag (%)": (df_2026["pythag_win_pct_weighted"] * 100.0).round(1).values,
-        "2025 Late PD/G": df_2026["late_pd_pg_y1"].round(2).values,
-        "Baseline LR (2026)": pred_base_26.round(2),
         "Enhanced LR (2026)": pred_lr_26.round(2),
         "Random Forest (2026)": pred_rf_26.round(2),
         "Proj Record (LR)": [
@@ -1573,6 +1830,9 @@ def project_2026_season(
         ],
         "Proj Record (RF)": [
             f"{int(round(p))}-{17 - int(round(p))}" for p in pred_rf_26
+        ],
+        "2026 Floor-Ceiling": [
+            f"{fl}-{17-fl} to {ce}-{17-ce}" for fl, ce in zip(floor_26, ceil_26)
         ],
     }).sort_values(by=["Enhanced LR (2026)", "Random Forest (2026)"], ascending=[False, False])
 
